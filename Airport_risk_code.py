@@ -14,12 +14,15 @@ from numpy import ma
 import os
 
 # edit model parameters here
-airport_size = 'TwinLakes'                                                                  # <<<<set airport size here, large, medium, small, GA, Mesa12, Luke3
-grid_extent = 'CustomGrid'                                                            # <<<<set grid size here, largeGrid, smallGrid, CLGrid (centerline)
+airport_size = 'TwinLakes'                     # Set the airport size here. Default ones are (large, medium, small) for specific assessment put your airport name here.
+grid_extent = 'CustomGrid'                     # set grid size here, largeGrid, smallGrid, CLGrid (centerline), CustomGrid.
+DC_area = 0.007182                             # km2, based on 266m x 27m 12pod design
 
-write_files = True
-runwaylength = 1219                             # in meters
+runwaylength = 1219                            # in meters
 Splitduetowind = [0.5,0.5]                     # Scenario 1 fraction will take off affect the scenario side vs Scenario 2 fraction take off affect the scenario side
+                                               # From left to right of the runway (small to larger x coordinates), first number represent the take off percentage in that direction, second number is 1-first number
+write_files = True
+
 
 # Set up the grid and calculate range
 if grid_extent == 'CustomGrid':
@@ -60,7 +63,7 @@ if not os.path.exists(dir3):
   os.mkdir(dir3)
 
 
-# number of movements per year for each aircraft category                      # these are half the values for the rep. airport since we are modeling one end of the runway
+# total number of movements per year (take off and land counts as 2 movements) for each aircraft category                      
 # LARGE AIRPORT
 if airport_size == 'large':
     nm_ac = 406160                                                                  # number of total air carrier movements
@@ -120,7 +123,7 @@ if airport_size == 'Luke3':
     nm_m  = 50000                                                                    # number of total military movements
     nm_tot = nm_ac + nm_r + nm_ga + nm_m     
 
-print('No. air carrier movements: ' + str(nm_ac))                                        # total number of movements     
+#print('No. air carrier movements: ' + str(nm_ac))                                        # total number of movements     
 
 
 # crash rate per movement for each aircraft category
@@ -135,16 +138,10 @@ cr_m  = 1.80e-6                                                                 
 # background crash rate for each aircraft category 
 # from Arup data analysis and DOE, 1996
 bcr_ac = 1.31e-7                                                                # number of crashes per sq km
-bcr_r  = 1.41e-6                                                                # 
-bcr_ga = 2.87e-5                                                                # 
-bcr_m  = 1.54e-6                                                                # 
+bcr_r  = 1.41e-6                                                                 
+bcr_ga = 2.87e-5                                                                 
+bcr_m  = 1.54e-6                                                                
 bcr_h  = 1.47e-6
-
-#bcr_ac = 0                                                               # number of crashes per sq km
-#bcr_r  = 0                                                                # 
-#bcr_ga = 0                                                                # 
-#bcr_m  = 0                                                                # 
-#bcr_h  = 0
 
 
 # impact areas for each aircraft category (km2)
@@ -154,12 +151,9 @@ ia_ac = 2.98E-2
 ia_r  = 5.52E-3
 ia_ga = 5.52E-4
 ia_m  = 1.33E-2
-ia_h  = 5.52E-4                                                                   # assume same as GA 
+ia_h  = 5.52E-4                                                                    
 
-# building area
-DC_area = 0.007182                                                                # km2, based on 266m x 27m 12pod design
-#DC_area = 0.0364217                                                                # This is the site substation
-#DC_area = 0.002275   # This is the size of small substation
+
 
 xlist = list(range(int(-xlim/2),int(xlim/2),Lgrid))
 #xlist = list(range(xlim,-3275-Lgrid,-1*Lgrid))
@@ -168,15 +162,9 @@ ylist = list(range(int(-ylim/2),int(ylim/2),Lgrid))
 grid = geopandas.GeoDataFrame()  
     
 for scenario_id in range(0,2):
-  # set up grid
-  
-                                           # Right side (larger coordinate side)        
+     
   nrows = len(xlist)
   ncols = len(ylist)
-  # print(x)
-  # print(y)
-
-
   
   row = []
   col = []
@@ -185,7 +173,7 @@ for scenario_id in range(0,2):
   rvalue = []
   tvalue = []
 
-  # Loop over each single grid points
+  # Loop over each single grid points get x and y coordinate for calculation as well as r and angle for each scenario (right and left end of runway)
   for i in range(nrows):
       for j in range(ncols):
           
@@ -194,7 +182,7 @@ for scenario_id in range(0,2):
         xvalue.append(xlist[i])          # x coordinate for each grid point. Origin is the center of xlim defined
         yvalue.append(ylist[j])          # y coordinate for each grid point. Origin is the center of ylim defined
         
-        # Recalculte the x,y coordinate use for the euqation. This is for the model of general aircraft as the coordinate is defined from the end of the run way
+        # Recalculte the x,y coordinate use for the equation. This is for the model of general aircraft as the coordinate is defined from the end of the run way
         if scenario_id == 0:
       
           x_calc = xlist[i]-runwaylength/2
@@ -225,26 +213,25 @@ for scenario_id in range(0,2):
 
 
   npts = len(grid['x'])
-  #print('No. grid pts: ' + str(npts))
-  #print(type(npts))
-
   fxyt  = numpy.zeros(npts)   # Take off risk for general method
   fxyl  = numpy.zeros(npts)   # Landing risk for general method
   fr_ga = numpy.zeros(npts)   # general aviation model
-  # fxyti = numpy.zeros(npts)
-  # fxyli = numpy.zeros(npts)
 
+  # Calculate the actual crashing risk using the airfield model for one scenario.
   for i in range(npts):
+
     xi = grid['x'][i]
     yi = grid['y'][i]
     ri = grid['r'][i]
     ti = grid['t'][i]
+
     # x1 = xi/1000 + Lgrid/2/1000
     # y1 = yi/1000 - Lgrid/2/1000
     # x2 = xi/1000 - Lgrid/2/1000
     # y2 = yi/1000 + Lgrid/2/1000
-    fr_ga[i] = (0.08*math.exp(-1.0*ri/2.5/1000.0) * math.exp(-1.0*ti/60.0))
 
+    # General aviation equation.
+    fr_ga[i] = (0.08*math.exp(-1.0*ri/2.5/1000.0) * math.exp(-1.0*ti/60.0))
 
 
     if scenario_id == 0:
@@ -287,32 +274,31 @@ for scenario_id in range(0,2):
         #                 - ((-cl/bl)*(x1+al+cl)*math.exp(-1*(x1+al)/cl)))
         #                 * (dl/125 + (ml/nl)*(math.exp(-1*nl*abs(y1))-math.exp(-1*nl*abs(y2)))
         #                 + (pl/ql)*(math.exp(-1*ql*abs(y1))-math.exp(-1*ql*abs(y2)))))
+  # if scenario_id == 0:
+  #   grid['fr_ga'] = fr_ga
+  #   grid['fxyt']  = fxyt
+  #   grid['fxyl']  = fxyl   
+    
+  # else:
+  #   grid['fr_ga'] = grid['fr_ga'] + fr_ga
+  #   grid['fxyt']  = grid['fxyt'] + fxyt
+  #   grid['fxyl']  = grid['fxyl'] + fxyl      
+
+
   if scenario_id == 0:
+
     grid['fr_ga'] = fr_ga
     grid['fxyt']  = fxyt
-    grid['fxyl']  = fxyl   
-    
- 
-    
-  else:
-    grid['fr_ga'] = grid['fr_ga'] + fr_ga
-    grid['fxyt']  = grid['fxyt'] + fxyt
-    grid['fxyl']  = grid['fxyl'] + fxyl      
-    # grid['fxyti'] = fxyti
-    # grid['fxyli'] = fxyli
-
-
-  if scenario_id == 0:
+    grid['fxyl']  = fxyl  
   
-    
-    nm_takeoff_ac = nm_ac * Splitduetowind[0]
-    nm_land_ac = nm_ac * Splitduetowind[1]
-    nm_takeoff_r = nm_r * Splitduetowind[0]
-    nm_land_r = nm_r * Splitduetowind[1]
-    nm_takeoff_ga = nm_ga * Splitduetowind[0]
-    nm_land_ga = nm_ga * Splitduetowind[1]
-    nm_takeoff_m = nm_m * Splitduetowind[0]
-    nm_land_m = nm_m * Splitduetowind[1]
+    nm_takeoff_ac = nm_ac * 0.5 * Splitduetowind[0]
+    nm_land_ac = nm_ac * 0.5 * Splitduetowind[1]
+    nm_takeoff_r = nm_r * 0.5 * Splitduetowind[0]
+    nm_land_r = nm_r * 0.5 * Splitduetowind[1]
+    nm_takeoff_ga = nm_ga * 0.5 * Splitduetowind[0]
+    nm_land_ga = nm_ga * 0.5 * Splitduetowind[1]
+    nm_takeoff_m = nm_m * 0.5 * Splitduetowind[0]
+    nm_land_m = nm_m * 0.5 * Splitduetowind[1]
 
   elif scenario_id == 1:
     
@@ -320,14 +306,14 @@ for scenario_id in range(0,2):
     grid['fxyt']  = grid['fxyt'] + fxyt
     grid['fxyl']  = grid['fxyl'] + fxyl   
     
-    nm_takeoff_ac = nm_ac * Splitduetowind[1]
-    nm_land_ac = nm_ac * Splitduetowind[0]
-    nm_takeoff_r = nm_r * Splitduetowind[1]
-    nm_land_r = nm_r * Splitduetowind[0]
-    nm_takeoff_ga = nm_ga * Splitduetowind[1]
-    nm_land_ga = nm_ga * Splitduetowind[0]
-    nm_takeoff_m = nm_m * Splitduetowind[1]
-    nm_land_m = nm_m * Splitduetowind[0]
+    nm_takeoff_ac = nm_ac * 0.5 * Splitduetowind[1]
+    nm_land_ac = nm_ac * 0.5 * Splitduetowind[0]
+    nm_takeoff_r = nm_r * 0.5 * Splitduetowind[1]
+    nm_land_r = nm_r * 0.5 * Splitduetowind[0]
+    nm_takeoff_ga = nm_ga * 0.5 * Splitduetowind[1]
+    nm_land_ga = nm_ga * 0.5 * Splitduetowind[0]
+    nm_takeoff_m = nm_m * 0.5 * Splitduetowind[1]
+    nm_land_m = nm_m * 0.5 * Splitduetowind[0]
   
 # calculate airfield crash risk = crash rate x no. movements x f(x,y)/f(r,theta)
   af_ac = cr_ac*(nm_takeoff_ac)* fxyt + cr_ac*(nm_land_ac)*fxyl
